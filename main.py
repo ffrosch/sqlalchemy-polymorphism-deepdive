@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from types import SimpleNamespace
-from typing import Literal
 
 from sqlalchemy import (
     Column,
@@ -26,10 +25,13 @@ from sqlalchemy.orm import (
     backref,
     column_property,
     declarative_base,
+    joinedload,
     mapped_column,
     relationship,
     remote,
+    selectinload,
     sessionmaker,
+    subqueryload,
 )
 
 Base = declarative_base()
@@ -57,6 +59,10 @@ class Report(Base):
 
     report_participant_associations: Mapped[list[ReportParticipants]] = relationship(
         back_populates="report",
+        # Use `selectin` to avoid the N+1 problem
+        # According to the docs `selectin` is usually the best eager-loading choice
+        lazy="selectin",
+        viewonly=True,
     )
 
     participants: AssociationProxy[list[Participant]] = association_proxy(
@@ -75,7 +81,9 @@ class Participant(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     type: Mapped[str] = mapped_column(String)
 
-    __mapper_args__ = {"polymorphic_on": type}
+    __mapper_args__ = {
+        "polymorphic_on": type,
+    }
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.id}, {self.name}, {self.email})"
@@ -89,6 +97,8 @@ class Participant(Base):
 
     participant_report_associations: Mapped[list[ReportParticipants]] = relationship(
         back_populates="participant",
+        lazy="selectin",
+        viewonly=True,
     )
 
     reports: AssociationProxy[list[Report]] = association_proxy(
@@ -103,7 +113,10 @@ class Participant(Base):
 
 class UnregisteredParticipant(Participant):
     __tablename__ = "unregistered_participant"
-    __mapper_args__ = {"polymorphic_identity": "unregistered"}
+    __mapper_args__ = {
+        "polymorphic_identity": "unregistered",
+        "polymorphic_load": "inline",
+    }
 
     id: Mapped[int] = mapped_column(ForeignKey(Participant.id), primary_key=True)
 
@@ -119,14 +132,21 @@ class RegisteredParticipant(Participant):
 
     __tablename__ = None
     # __tablename__ = "registered_participant"
-    __mapper_args__ = {"polymorphic_identity": "registered"}
+    __mapper_args__ = {
+        "polymorphic_identity": "registered",
+        "polymorphic_load": "inline",
+    }
 
     # id: Mapped[int] = mapped_column(ForeignKey(Participant.id), primary_key=True)
 
     user_id: Mapped[int] = mapped_column(
         ForeignKey(User.id), unique=True, nullable=True
     )
-    user: Mapped[User] = relationship(single_parent=True)
+    user: Mapped[User] = relationship(
+        single_parent=True,
+        uselist=False,
+        lazy="selectin",
+    )
 
     def __repr__(self):
         return f"{self.__class__.__name__}({self.id}, {self.user})"
@@ -151,10 +171,18 @@ class ReportParticipants(Base):
     __mapper_args__ = {"polymorphic_on": type}
 
     report_id = Column(Integer, ForeignKey(Report.id))
-    report = relationship(Report)
+    report = relationship(
+        Report,
+        back_populates="report_participant_associations",
+        lazy="selectin",
+    )
 
     participant_id = Column(Integer, ForeignKey(Participant.id))
-    participant = relationship(Participant)
+    participant = relationship(
+        Participant,
+        back_populates="participant_report_associations",
+        lazy="selectin",
+    )
 
     def __repr__(self):
         return (
@@ -164,14 +192,20 @@ class ReportParticipants(Base):
 
 class ReportParticipantsUnregistered(ReportParticipants):
     __tablename__ = "report_participants_unregistered"
-    __mapper_args__ = {"polymorphic_identity": "unregistered"}
+    __mapper_args__ = {
+        "polymorphic_identity": "unregistered",
+        "polymorphic_load": "inline",
+    }
 
     id: Mapped[int] = mapped_column(ForeignKey(ReportParticipants.id), primary_key=True)
 
 
 class ReportParticipantsRegistered(ReportParticipants):
     __tablename__ = "report_participants_registered"
-    __mapper_args__ = {"polymorphic_identity": "registered"}
+    __mapper_args__ = {
+        "polymorphic_identity": "registered",
+        "polymorphic_load": "inline",
+    }
 
     id: Mapped[int] = mapped_column(ForeignKey(ReportParticipants.id), primary_key=True)
 
@@ -210,11 +244,13 @@ def EchoSession():
 
 
 with EchoSession() as session:
+    print()
     print("---------------------------------- BEGIN Queries")
     session.query(User).all()
 
 
 with Session() as session:
+    print()
     print("---------------------------------- BEGIN Insert Data")
     users = [
         User(name="John Doe", email="john@doe.com"),
@@ -274,8 +310,21 @@ with Session() as session:
 
 
 with EchoSession() as session:
-    print("---------------------------------- TEST AssociationProxies")
+    """This is important to test to avoid N+1 queries"""
 
-    # TODO: Fix that every "participants" call is a separate query
+    # Due to eager-loading on the relations and polymorphic associations
+    # no N+1 queries are executed
+
+    # Empty the terminal output
+    # os.system("clear")
+
+    print("---------------------------------- TEST Report AssociationProxy")
+
     reports = session.scalars(select(Report)).all()
     print([r.participants for r in reports])
+
+    print()
+    print("---------------------------------- TEST Participant AssociationProxy")
+
+    participants = session.scalars(select(Participant)).all()
+    print([p.reports for p in participants])
