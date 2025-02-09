@@ -117,3 +117,27 @@ with Session() as session:
     - define relations that could interfere with the most important relation on a model as `viewonly=True`
     - define `cascade="all, delete-orphan"` and `back_populates=` where necessary to ensure data integrity
 - **Use hybrid properties and expressions where appropriate**: if `@property` is used, replace it if possible
+
+
+## TODO (Ideas)
+
+- move `__mapper_args__` to a single location using a helper function
+- save `RegisteredParticipant` in its own table (set `__tablename__`) to have a consistent approach overall (joined table inheritance)
+- add docstrings
+- improve repr methods: Ensure that the __repr__ methods reveal enough context for debugging but do not inadvertently trigger lazy loads or recursive queries. For example, in the Participant class, accessing self.name might be overridden by properties
+- performance: If the polymorphic queries are expected to be run frequently, consider adding indexes on the discriminator columns (e.g., the type columns in both Participant and ReportParticipants)
+- Use explicit joins when necessary to avoid potential N+1 issues, especially when working with association proxies and lazy-loaded relationships
+
+```python
+@hybrid_property
+def participants_count(self):
+    return len(self.participants)
+
+@participants_count.expression
+def participants_count(cls):
+    return (
+        select(func.count(ReportParticipants.id))
+        .where(ReportParticipants.report_id == cls.id)
+        .scalar_subquery()
+    )
+```
