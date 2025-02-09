@@ -1,89 +1,110 @@
-# SQLAlchemy Polymorphic Associations
+# SQLAlchemy Polymorphic Associations - Design & AI Prompt
 
-## Project Description
+## Overview
 
-This project demonstrates the use of SQLAlchemy to implement polymorphic associations using the table-per-association pattern. The goal is to manage different types of participants (registered and unregistered) in various reports, while maintaining a clean and efficient database schema.
+This document provides a technical design overview using a table-per-association pattern to manage polymorphic associations in SQLAlchemy. It serves as both a design document and an AI prompt.
 
-## Models
+## Technical Architecture
 
-### User
-Represents a user in the system.
-- **Attributes**: `id`, `name`, `email`
-- **Relationships**: None
+### Models
 
-### Report
-Represents a report in the system.
-- **Attributes**: `id`, `species`
-- **Relationships**: 
-  - `report_participant_associations`: Relationship to `ReportParticipants`
-  - `participants`: AssociationProxy to `Participant` through `report_participant_associations`
+- **User**: Represents a user in the system.
+  - **Attributes**: `id`, `name`, `email`
+  - **Relationships**: None
 
-### Participant
-Base class for participants in reports.
-- **Attributes**: `id`, `type`
-- **Relationships**: 
-  - `participant_report_associations`: Relationship to `ReportParticipants`
-  - `reports`: AssociationProxy to `Report` through `participant_report_associations`
-- **Polymorphic**: Yes, based on `type`
+- **Report**: Represents a report in the system.
+  - **Attributes**: `id`, `species`
+  - **Relationships**: 
+    - `report_participant_associations`: Relationship to `ReportParticipants`
+    - `participants`: AssociationProxy to `Participant` through `report_participant_associations`
+  - **Methods**:
+    - `participants_count`: Property to get the count of participants in the report
 
-### UnregisteredParticipant
-Represents an unregistered participant.
-- **Attributes**: `id`, `name`, `email`
-- **Relationships**: Inherits from `Participant`
-- **Polymorphic Identity**: `unregistered`
+- **Participant**: Base class for participants in reports.
+  - **Attributes**: `id`, `type`
+  - **Relationships**: 
+    - `participant_report_associations`: Relationship to `ReportParticipants`
+    - `reports`: AssociationProxy to `Report` through `participant_report_associations`
+  - **Polymorphic**: Yes, based on `type`
+  - **Methods**:
+    - `reports_count`: Property to get the count of reports for the participant
 
-### RegisteredParticipant
-Represents a registered participant.
-- **Attributes**: `user_id`
-- **Relationships**: 
-  - `user`: Relationship to `User`
-- **Polymorphic Identity**: `registered`
+- **UnregisteredParticipant**: Represents an unregistered participant.
+  - **Attributes**: `id`, `name`, `email`
+  - **Relationships**: Inherits from `Participant`
+  - **Polymorphic Identity**: `unregistered`
 
-### ReportParticipants
-Base class for the association between reports and participants.
-- **Attributes**: `id`, `type`, `role`, `report_id`, `participant_id`
-- **Relationships**: 
-  - `report`: Relationship to `Report`
-  - `participant`: Relationship to `Participant`
-- **Polymorphic**: Yes, based on `type`
-- **Constraints**:
-    - `role in ('creator', 'reporter', 'observer')`
-    - `Unique(report_id, role)`
-    - Instantiation: `RegisteredParticipant` and `UnregisteredParticipant` have to be handled differently. Each `RegisteredParticipant` is created based on the `User.id`. There can be only one entry for each `User.id`. If a `RegisteredParticipant` with the same `user_id` already exists, do not raise an error but instead discard the new instance and use the existing one.
+- **RegisteredParticipant**: Represents a registered participant.
+  - **Attributes**: `user_id`
+  - **Relationships**: 
+    - `user`: Relationship to `User`
+  - **Polymorphic Identity**: `registered`
+  - **Methods**:
+    - `name`: Property to get the name of the user
+    - `email`: Property to get the email of the user
 
+- **ReportParticipants**: Base class for the association between reports and participants.
+  - **Attributes**: `id`, `type`, `role`, `report_id`, `participant_id`
+  - **Relationships**: 
+    - `report`: Relationship to `Report`
+    - `participant`: Relationship to `Participant`
+  - **Polymorphic**: Yes, based on `type`
+  - **Constraints**:
+      - `role in ('creator', 'reporter', 'observer')`
+      - `Unique(report_id, role)`
+      - Instantiation: `RegisteredParticipant` and `UnregisteredParticipant` have to be handled differently. Each `RegisteredParticipant` is created based on the `User.id`. There can be only one entry for each `User.id`. If a `RegisteredParticipant` with the same `user_id` already exists, do not raise an error but instead discard the new instance and use the existing one.
 
-### ReportParticipantsUnregistered
-Represents the association between a report and an unregistered participant.
-- **Attributes**: `id`
-- **Relationships**: Inherits from `ReportParticipants`
-- **Polymorphic Identity**: `unregistered`
+- **ReportParticipantsUnregistered**: Represents the association between a report and an unregistered participant.
+  - **Attributes**: `id`
+  - **Relationships**: Inherits from `ReportParticipants`
+  - **Polymorphic Identity**: `unregistered`
 
-### ReportParticipantsRegistered
-Represents the association between a report and a registered participant.
-- **Attributes**: `id`
-- **Relationships**: Inherits from `ReportParticipants`
-- **Polymorphic Identity**: `registered`
+- **ReportParticipantsRegistered**: Represents the association between a report and a registered participant.
+  - **Attributes**: `id`
+  - **Relationships**: Inherits from `ReportParticipants`
+  - **Polymorphic Identity**: `registered`
 
+### Key Points
 
-## Architectural Choices
+- Use of eager loading for efficiency.
+- Enforce polymorphic associations via `__mapper_args__`.
+- Implement association proxies for simplified querying.
 
-### Eager loading of associations
-In the context of this project and the use cases the models will always be queried for their associations. To make the sql queries as efficient as possible, it is important that those associations are loaded eagerly.
+## Pseudocode Examples
 
-This requires extra attention for the polymorphic associations, because they will not load eagerly even if all relations are configured to load eagerly.
-
-According to the [SQLAlchemy Docs](https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html#configuring-with-polymorphic-on-mappers) this is best done with the `polymorphic_load: inline` mapper argument on each individual subclass.
-
-**WARN**: It is advised against using the `with_polymorphic` on the Parent (PolymorphicInterface).
-
-
+### Example: count participants for a report
 ```python
-class Subclass(PolymorphicInterface):
-    __mapper_args__ = {
-        "polymorphic_load": "inline",
-        }
+@hybrid_property
+def participants_count(self):
+    return len(self.participants)
+
+@participants_count.expression
+def participants_count(cls):
+    return (
+        select(func.count(ReportParticipants.id))
+        .where(ReportParticipants.report_id == cls.id)
+        .scalar_subquery()
+    )
 ```
 
+### Example: adding participants to a report with role checks
+```python
+with Session() as session:
+    report = Report(
+      species="Species Name",
+      participants=[
+          ReportParticipant(user_id=1),  # creates a `RegisteredReportParticipant`
+          ReportParticipant(name="John Weir", email="john@weir.com")  # creates a `UnregisteredReportParticipant`
+      ]
+    )
+    session.add(report)
+    session.commit()
+```
+
+## Improvement Suggestions
+
+- **Approach 1**: Structure the document with clear sectioning, ensuring that both the high-level design and low-level pseudocode are separate.
+- **Approach 2**: Streamline content by using concise pseudocode examples and formal language, avoiding excessive narrative while preserving technical precision.
 
 ## Techniques Used
 
@@ -130,35 +151,23 @@ with Session() as session:
 
 ## Troubleshooting Tips
 
-- **Ensure Polymorphic Identity is Correct**: Verify that the `polymorphic_identity` attribute is correctly set for each subclass.
-- **Check Foreign Key Constraints**: Ensure that foreign key relationships are properly defined and that the referenced records exist.
-- **Debugging Queries**: Use SQLAlchemy's `echo=True` option in the engine to log SQL queries for debugging purposes.
-- **Ensure associations are loaded in the original query**: Because `Report.participants` and `Participant.reports` will always be needed, they must be eagerly loaded
-- **Define all necessary relationships and association proxies**:
-    - define relations that could interfere with the most important relation on a model as `viewonly=True`
-    - define `cascade="all, delete-orphan"` and `back_populates=` where necessary to ensure data integrity
-- **Use hybrid properties and expressions where appropriate**: if `@property` is used, replace it if possible
+- Verify that each model's polymorphic_identity is correctly set.
+   - Confirm polymorphic_identity settings, foreign key constraints, and eager loading for critical associations.
+- Enable SQLAlchemy's echo mode (echo=True) to log SQL queries for debugging.
+   - Activate echo=True in SQLAlchemy to monitor and troubleshoot SQL queries.
+- Use options like viewonly, cascade="all, delete-orphan", and back_populates to maintain data integrity.
+- Prefer hybrid properties over simple @property methods when applicable.erty methods.
 
-
-## TODO (Ideas)
-
-- move `__mapper_args__` to a single location using a helper function
-- save `RegisteredParticipant` in its own table (set `__tablename__`) to have a consistent approach overall (joined table inheritance)
-- add docstrings
-- improve repr methods: Ensure that the __repr__ methods reveal enough context for debugging but do not inadvertently trigger lazy loads or recursive queries. For example, in the Participant class, accessing self.name might be overridden by properties
-- performance: If the polymorphic queries are expected to be run frequently, consider adding indexes on the discriminator columns (e.g., the type columns in both Participant and ReportParticipants)
-- Use explicit joins when necessary to avoid potential N+1 issues, especially when working with association proxies and lazy-loaded relationships
-
-```python
-@hybrid_property
-def participants_count(self):
-    return len(self.participants)
-
-@participants_count.expression
-def participants_count(cls):
-    return (
-        select(func.count(ReportParticipants.id))
-        .where(ReportParticipants.report_id == cls.id)
-        .scalar_subquery()
-    )
-```
+## Future Enhancements
+   
+1. Centralize __mapper_args__ configuration:  
+   - Create a helper function to set common __mapper_args__ to reduce redundancy.
+2. Refactor RegisteredParticipant:  
+   - Define its own table (using __tablename__) to enforce a consistent joined table inheritance pattern.
+3. Performance optimizations:
+   - Add indexes on discriminator columns (e.g., `type` in Participant and ReportParticipants) for faster polymorphic queries.
+4. Use `@hybrid_property` instead of `@property`
+5. Documentation improvements:
+   - Add comprehensive docstrings to models and methods for clarity and maintainability.
+6. Improve __repr__ methods:
+   - Ensure __repr__ methods provide enough context for debugging without triggering lazy loads or recursive queries.
