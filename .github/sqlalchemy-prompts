@@ -1,0 +1,119 @@
+# SQLAlchemy Polymorphic Associations
+
+## Project Description
+
+This project demonstrates the use of SQLAlchemy to implement polymorphic associations using the table-per-association pattern. The goal is to manage different types of participants (registered and unregistered) in various reports, while maintaining a clean and efficient database schema.
+
+## Models
+
+### User
+Represents a user in the system.
+- **Attributes**: `id`, `name`, `email`
+- **Relationships**: None
+
+### Report
+Represents a report in the system.
+- **Attributes**: `id`, `species`
+- **Relationships**: 
+  - `report_participant_associations`: Relationship to `ReportParticipants`
+  - `participants`: AssociationProxy to `Participant` through `report_participant_associations`
+
+### Participant
+Base class for participants in reports.
+- **Attributes**: `id`, `type`
+- **Relationships**: 
+  - `participant_report_associations`: Relationship to `ReportParticipants`
+  - `reports`: AssociationProxy to `Report` through `participant_report_associations`
+- **Polymorphic**: Yes, based on `type`
+
+### UnregisteredParticipant
+Represents an unregistered participant.
+- **Attributes**: `id`, `name`, `email`
+- **Relationships**: Inherits from `Participant`
+- **Polymorphic Identity**: `unregistered`
+
+### RegisteredParticipant
+Represents a registered participant.
+- **Attributes**: `user_id`
+- **Relationships**: 
+  - `user`: Relationship to `User`
+- **Polymorphic Identity**: `registered`
+
+### ReportParticipants
+Base class for the association between reports and participants.
+- **Attributes**: `id`, `type`, `role`, `report_id`, `participant_id`
+- **Relationships**: 
+  - `report`: Relationship to `Report`
+  - `participant`: Relationship to `Participant`
+- **Polymorphic**: Yes, based on `type`
+- **Constraints**:
+    - `role in ('creator', 'reporter', 'observer')`
+    - `Unique(report_id, role)`
+    - Instantiation: `RegisteredParticipant` and `UnregisteredParticipant` have to be handled differently. Each `RegisteredParticipant` is created based on the `User.id`. There can be only one entry for each `User.id`. If a `RegisteredParticipant` with the same `user_id` already exists, do not raise an error but instead discard the new instance and use the existing one.
+
+
+### ReportParticipantsUnregistered
+Represents the association between a report and an unregistered participant.
+- **Attributes**: `id`
+- **Relationships**: Inherits from `ReportParticipants`
+- **Polymorphic Identity**: `unregistered`
+
+### ReportParticipantsRegistered
+Represents the association between a report and a registered participant.
+- **Attributes**: `id`
+- **Relationships**: Inherits from `ReportParticipants`
+- **Polymorphic Identity**: `registered`
+
+## Techniques Used
+
+- **Polymorphic Associations**: Implemented using SQLAlchemy's `polymorphic_on` and `polymorphic_identity`.
+- **Association Proxy**: Used to simplify access to related objects through intermediate association tables.
+- **Table-Per-Association Pattern**: Each association type has its own table, allowing for flexible and efficient schema design.
+
+## Example Queries
+
+### Retrieve all reports with their participants
+```python
+with Session() as session:
+    reports = session.query(Report).all()
+    for report in reports:
+        print(report, report.participants)
+```
+
+### Retrieve all participants and their reports
+```python
+with Session() as session:
+    participants = session.query(Participant).all()
+    for participant in participants:
+        print(participant, participant.reports)
+```
+
+## Common Use Cases
+
+- **Adding a new participant to a report**:
+  ```python
+  with Session() as session:
+      report = Report(
+        species="Species Name",
+        participants=[
+            ReportParticipant(user_id=1),  # creates a `RegisteredReportParticipant`
+            ReportParticipant(name="John Weir", email="john@weir.com")  # creates a `UnregisteredReportParticipant`
+        ]
+      )
+      session.add(report)
+      session.commit()
+  ```
+
+- **Deleting a participant from a report**
+
+
+## Troubleshooting Tips
+
+- **Ensure Polymorphic Identity is Correct**: Verify that the `polymorphic_identity` attribute is correctly set for each subclass.
+- **Check Foreign Key Constraints**: Ensure that foreign key relationships are properly defined and that the referenced records exist.
+- **Debugging Queries**: Use SQLAlchemy's `echo=True` option in the engine to log SQL queries for debugging purposes.
+- **Ensure associations are loaded in the original query**: Because `Report.participants` and `Participant.reports` will always be needed, they must be eagerly loaded
+- **Define all necessary relationships and association proxies**:
+    - define relations that could interfere with the most important relation on a model as `viewonly=True`
+    - define `cascade="all, delete-orphan"` and `back_populates=` where necessary to ensure data integrity
+- **Use hybrid properties and expressions where appropriate**: if `@property` is used, replace it if possible
