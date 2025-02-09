@@ -162,12 +162,10 @@ with Session() as session:
    
 1. Centralize __mapper_args__ configuration:  
    - Create a helper function to set common __mapper_args__ to reduce redundancy.
-2. Refactor RegisteredParticipant:  
-   - Define its own table (using __tablename__) to enforce a consistent joined table inheritance pattern.
-3. Performance optimizations:
+2. Performance optimizations:
    - Add indexes on discriminator columns (e.g., `type` in Participant and ReportParticipants) for faster polymorphic queries.
-4. Use `@hybrid_property` instead of `@property`
-5. Documentation improvements:
+3. Use `@hybrid_property` instead of `@property`
+4. Documentation improvements:
    - Add comprehensive docstrings to models and methods for clarity and maintainability.
-6. Improve __repr__ methods:
+5. Improve __repr__ methods:
    - Ensure __repr__ methods provide enough context for debugging without triggering lazy loads or recursive queries.

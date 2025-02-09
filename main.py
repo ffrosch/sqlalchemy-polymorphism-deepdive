@@ -125,19 +125,13 @@ class UnregisteredParticipant(Participant):
 
 
 class RegisteredParticipant(Participant):
-    """Uses the parent-table.
-
-    To get an extra table use a tablename and the id column.
-    """
-
-    __tablename__ = None
-    # __tablename__ = "registered_participant"
+    __tablename__ = "registered_participant"
     __mapper_args__ = {
         "polymorphic_identity": "registered",
         "polymorphic_load": "inline",
     }
 
-    # id: Mapped[int] = mapped_column(ForeignKey(Participant.id), primary_key=True)
+    id: Mapped[int] = mapped_column(ForeignKey(Participant.id), primary_key=True)
 
     user_id: Mapped[int] = mapped_column(
         ForeignKey(User.id), unique=True, nullable=True
