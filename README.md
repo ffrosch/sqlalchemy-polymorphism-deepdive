@@ -1,6 +1,16 @@
+
 # SQLAlchemy Polymorphic Associations
 
 ## Architectural Choices
+
+### Joined Table Inheritance
+
+The class `ReportParticipant` uses [joined table inheritance polymorphism](https://docs.sqlalchemy.org/en/20/orm/inheritance.html#joined-table-inheritance).
+This makes it possible to treat registered users and unregistered users (reporters, observers) in exactly the same way via the ORM models while the ORM handles all the rest.
+Specific stuff exclusive to either a registered or unregistered user can be handled on the specific model.
+
+Most stuff will work by just querying the base model "ReportParticipant".
+For more complex use cases refer to [Writing SELECT statements for Inheritance Mappings](https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html#loading-joined-inheritance) or the [joined inheritance example.py](https://docs.sqlalchemy.org/en/20/_modules/examples/inheritance/joined.html)
 
 ### Eager loading of associations
 
@@ -16,8 +26,14 @@ According to the [SQLAlchemy Docs](https://docs.sqlalchemy.org/en/20/orm/querygu
 class Subclass(PolymorphicInterface):
     __mapper_args__ = {
         "polymorphic_load": "inline",
-        }
+    }
 ```
+
+### Association Proxies
+
+### Dictionary Collections
+
+[ORM Dictionary Collection](https://docs.sqlalchemy.org/en/20/orm/collection_api.html#orm-dictionary-collection)
 
 ### SELECT IN eager loading
 
@@ -28,3 +44,10 @@ class Subclass(PolymorphicInterface):
 ## Technical Reading
 
 - [Writing Select Statements for Inheritance Mappings](https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html#writing-select-statements-for-inheritance-mappings)
+
+## TODO
+
+Association:
+- setting "role" key doesn't ensure key uniqueness [Composite Association Proxies](https://docs.sqlalchemy.org/en/20/orm/extensions/associationproxy.html#composite-association-proxies)
+- use a [UniqueObject recipe](https://github.com/sqlalchemy/sqlalchemy/wiki/UniqueObject)
+- or maybe a [DynamicDict](https://docs.sqlalchemy.org/en/20/_modules/examples/dynamic_dict/dynamic_dict.html)

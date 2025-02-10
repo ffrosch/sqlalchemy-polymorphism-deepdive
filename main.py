@@ -67,7 +67,7 @@ class Report(Base):
         # Use `selectin` to avoid the N+1 problem
         # According to the docs `selectin` is usually the best eager-loading choice
         lazy="selectin",
-        viewonly=True,
+        # viewonly=True,
     )
 
     participants: AssociationProxy[list[Participant]] = association_proxy(
@@ -217,15 +217,13 @@ class ReportParticipants(Base):
     )
 
     report_id: Mapped[int] = mapped_column(Integer, ForeignKey(Report.id))
-    report = relationship(
-        Report,
+    report: Mapped[Report] = relationship(
         back_populates="report_participant_associations",
         lazy="selectin",
     )
 
     participant_id = Column(Integer, ForeignKey(Participant.id))
-    participant = relationship(
-        Participant,
+    participant: Mapped[Participant] = relationship(
         back_populates="participant_report_associations",
         lazy="selectin",
     )
@@ -405,7 +403,6 @@ with Session() as session:
         role=role,
     )
 
-
     session.add(participant1)
     session.commit()
 
@@ -414,9 +411,35 @@ with Session() as session:
         participant=UnregisteredParticipant(name="Test Role", email="test@role.org"),
         role=role,
     )
-    print(f"ROLE '{role}' ALREADY EXISTS on report {report.id}" if Report.role_exists(report.id, role) else "Role does not exist")
+    print(
+        f"ROLE '{role}' ALREADY EXISTS on report {report.id}"
+        if Report.role_exists(report.id, role)
+        else "Role does not exist"
+    )
     try:
         session.add(participant2)
         session.commit()
     except Exception as e:
         print(e)
+
+
+with EchoSession() as session:
+    print()
+    print("---------------------------------- TEST CHECK CONSTRAINTS AGAIN")
+
+    role = "observer"
+    report = Report(
+        species="Eichhörnchen",
+        report_participant_associations=[
+            ReportParticipantsUnregistered(
+                role="creator",
+                participant=UnregisteredParticipant(
+                    name="Peter", email="peter@example.com"
+                ),
+            )
+        ],
+    )
+    session.add(report)
+    session.commit()
+
+    print(report, report.participants)

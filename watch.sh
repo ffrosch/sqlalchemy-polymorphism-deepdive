@@ -10,5 +10,5 @@ FILE_TO_WATCH=$1
 while true; do
     inotifywait -e modify "$FILE_TO_WATCH"
     clear
-    python "$FILE_TO_WATCH"
+    pytest
 done

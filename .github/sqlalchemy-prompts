@@ -156,5 +156,3 @@ with Session() as session:
    - Activate echo=True in SQLAlchemy to monitor and troubleshoot SQL queries.
 - Use options like viewonly, cascade="all, delete-orphan", and back_populates to maintain data integrity.
 - Prefer hybrid properties over simple @property methods when applicable.erty methods.
-
-## Future Enhancements
