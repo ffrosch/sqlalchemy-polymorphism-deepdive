@@ -19,6 +19,12 @@ class Subclass(PolymorphicInterface):
         }
 ```
 
+### SELECT IN eager loading
+
+> The strategy emits a SELECT for up to 500 parent primary key values at a time, as thce primary keys are rendered into a large IN expression in the SQL statement. Some databases like Oracle Database have a hard limit on how large an IN expression can be, and overall the size of the SQL string shouldn’t be arbitrarily large.
+> [Quelle](https://docs.sqlalchemy.org/en/20/orm/queryguide/relationships.html#select-in-loading)
+
+
 ## Technical Reading
 
 - [Writing Select Statements for Inheritance Mappings](https://docs.sqlalchemy.org/en/20/orm/queryguide/inheritance.html#writing-select-statements-for-inheritance-mappings)

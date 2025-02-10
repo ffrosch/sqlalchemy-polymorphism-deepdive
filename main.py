@@ -2,23 +2,28 @@ from __future__ import annotations
 
 import os
 from types import SimpleNamespace
+from typing import Optional
 
 from sqlalchemy import (
+    CheckConstraint,
     Column,
     ForeignKey,
     Integer,
     StaticPool,
     String,
+    and_,
     create_engine,
     func,
     join,
     or_,
     select,
     union,
+    exists,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
 from sqlalchemy.orm import (
     Mapped,
     as_declarative,
@@ -71,22 +76,49 @@ class Report(Base):
     )
 
     @property
-    def participants_count(self):
+    def existing_roles(self):
+        participants = self.report_participant_associations
+        return [p.role for p in participants]
+
+    @classmethod
+    def role_exists(cls, report_id: int, role: str):
+        return (
+            session.scalars(
+                select(ReportParticipants.role).where(
+                    and_(
+                        ReportParticipants.report_id == report_id,
+                        ReportParticipants.role == role,
+                    )
+                )
+            ).one_or_none()
+            == role
+        )
+
+    @hybrid_property
+    def count_participants(self):
         return len(self.participants)
+
+    @count_participants.expression
+    def count_participants(cls):
+        return (
+            select(func.count(ReportParticipants.id))
+            .where(ReportParticipants.report_id == cls.id)
+            .scalar_subquery()
+        )
 
 
 class Participant(Base):
     __tablename__ = "participant"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    type: Mapped[str] = mapped_column(String)
+    type: Mapped[str] = mapped_column(String, index=True)
 
     __mapper_args__ = {
         "polymorphic_on": type,
     }
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.id}, {self.name}, {self.email})"
+        return f"{self.__class__.__name__}({self.id}, {self.type})"
 
     # reports_relation: Mapped[list[Report]] = relationship(
     #     primaryjoin=lambda: Participant.id == ReportParticipants.participant_id,
@@ -106,9 +138,17 @@ class Participant(Base):
         "report",
     )
 
-    @property
-    def reports_count(self):
+    @hybrid_property
+    def count_reports(self):
         return len(self.reports)
+
+    @count_reports.expression
+    def count_reports(cls):
+        return (
+            select(func.count(ReportParticipants.id))
+            .where(ReportParticipants.participant_id == cls.id)
+            .scalar_subquery()
+        )
 
 
 class UnregisteredParticipant(Participant):
@@ -122,6 +162,9 @@ class UnregisteredParticipant(Participant):
 
     name: Mapped[str] = mapped_column(String)
     email: Mapped[str] = mapped_column(String)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.id}, {self.name}, {self.email})"
 
 
 class RegisteredParticipant(Participant):
@@ -158,13 +201,22 @@ class ReportParticipants(Base):
     __tablename__ = "report_participants"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    type: Mapped[str] = mapped_column(String)
+    type: Mapped[str] = mapped_column(String, index=True)
+    __mapper_args__ = {"polymorphic_on": type}
 
     role: Mapped[str] = mapped_column(String)
 
-    __mapper_args__ = {"polymorphic_on": type}
+    __table_args__ = (
+        CheckConstraint(
+            role.in_(["creator", "reporter", "observer"]),
+            name="ck_report_participants_valid_role",
+        ),
+        UniqueConstraint(
+            "report_id", "role", name="uq_report_participants_report_role"
+        ),
+    )
 
-    report_id = Column(Integer, ForeignKey(Report.id))
+    report_id: Mapped[int] = mapped_column(Integer, ForeignKey(Report.id))
     report = relationship(
         Report,
         back_populates="report_participant_associations",
@@ -178,10 +230,14 @@ class ReportParticipants(Base):
         lazy="selectin",
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.role not in ("creator", "reporter", "observer"):
+            raise ValueError(f"Invalid role: {self.role}")
+
     def __repr__(self):
-        return (
-            f"{self.__class__.__name__}({self.id}, {self.report.species}, {self.role})"
-        )
+        return f"{self.__class__.__name__}({self.report_id},  {self.role})"
 
 
 class ReportParticipantsUnregistered(ReportParticipants):
@@ -208,6 +264,7 @@ def new_engine(db=":memory:", echo=False):
     if db != ":memory:":
         if os.path.exists(db) and os.path.isfile(db):
             os.remove(db)
+
     return create_engine(
         f"sqlite:///{db}",
         echo=echo,
@@ -281,6 +338,9 @@ with Session() as session:
     session.commit()
 
     participants = session.query(Participant).all()
+    participants_with_multiple_reports = (
+        session.query(Participant).where(Participant.count_reports > 1).all()
+    )
 
     print("#  Users:".ljust(30), users)
     print("#  Registered Participants:".ljust(30), registered_participants)
@@ -290,12 +350,17 @@ with Session() as session:
     print("#  Report Participants:".ljust(30), report_participants)
     print(
         "#  Report Participants:".ljust(30),
-        reports[0].participants_count,
+        reports[0].count_participants,
         reports[0].participants,
     )
     print(
         "#  Reports per User:".ljust(30),
-        [p.reports_count for p in session.query(Participant)],
+        [p.count_reports for p in session.query(Participant)],
+    )
+
+    print(
+        "#  Participants with more than 1 report:".ljust(30),
+        participants_with_multiple_reports,
     )
     print(
         "#  Reports AssociationProxy:".ljust(30),
@@ -303,7 +368,7 @@ with Session() as session:
     )
 
 
-with EchoSession() as session:
+with Session() as session:
     """This is important to test to avoid N+1 queries"""
 
     # Due to eager-loading on the relations and polymorphic associations
@@ -322,3 +387,36 @@ with EchoSession() as session:
 
     participants = session.scalars(select(Participant)).all()
     print([p.reports for p in participants])
+
+
+with Session() as session:
+    print()
+    print("---------------------------------- TEST CHECK CONSTRAINTS")
+
+    role = "observer"
+    report = Report(species="Capercaillie")
+
+    session.add(report)
+    session.commit()
+
+    participant1 = ReportParticipantsUnregistered(
+        report=report,
+        participant=UnregisteredParticipant(name="Test Role", email="test@role.org"),
+        role=role,
+    )
+
+
+    session.add(participant1)
+    session.commit()
+
+    participant2 = ReportParticipantsUnregistered(
+        report=report,
+        participant=UnregisteredParticipant(name="Test Role", email="test@role.org"),
+        role=role,
+    )
+    print(f"ROLE '{role}' ALREADY EXISTS on report {report.id}" if Report.role_exists(report.id, role) else "Role does not exist")
+    try:
+        session.add(participant2)
+        session.commit()
+    except Exception as e:
+        print(e)

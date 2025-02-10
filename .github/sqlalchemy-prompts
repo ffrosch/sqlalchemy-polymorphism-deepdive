@@ -148,7 +148,6 @@ with Session() as session:
 
 - **Deleting a participant from a report**
 
-
 ## Troubleshooting Tips
 
 - Verify that each model's polymorphic_identity is correctly set.
@@ -159,13 +158,3 @@ with Session() as session:
 - Prefer hybrid properties over simple @property methods when applicable.erty methods.
 
 ## Future Enhancements
-   
-1. Centralize __mapper_args__ configuration:  
-   - Create a helper function to set common __mapper_args__ to reduce redundancy.
-2. Performance optimizations:
-   - Add indexes on discriminator columns (e.g., `type` in Participant and ReportParticipants) for faster polymorphic queries.
-3. Use `@hybrid_property` instead of `@property`
-4. Documentation improvements:
-   - Add comprehensive docstrings to models and methods for clarity and maintainability.
-5. Improve __repr__ methods:
-   - Ensure __repr__ methods provide enough context for debugging without triggering lazy loads or recursive queries.
