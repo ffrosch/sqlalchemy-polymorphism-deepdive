@@ -1,17 +1,20 @@
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from models import (
-    Base,
+
+from polymorphic_with_auxilliary.models import (
     _ROLES,
+    Base,
     Report,
+    ReportParticipant,
     ReportParticipantAssociation,
-    ReportRole,
-    User,
-    ReportParticipantUnregistered,
     ReportParticipantRegistered,
+    ReportParticipantRole,
     ReportParticipantRoleAssociation,
+    ReportParticipantUnregistered,
+    User,
 )
-import os
 
 db = "database.db"
 if os.path.exists(db) and os.path.isfile(db):
@@ -27,7 +30,7 @@ Session = sessionmaker(bind=engine)
 
 def create_roles():
     with Session() as session:
-        roles = [ReportRole(name=name) for name in _ROLES]
+        roles = [ReportParticipantRole(name=name) for name in _ROLES]
         session.add_all(roles)
         session.commit()
 
@@ -63,16 +66,14 @@ def create_participants():
                 ReportParticipantRoleAssociation(
                     role_id=1,
                     report_id=i + 1,
-                    rpa_participant_id=i + 1,
-                    rpa_report_id=i + 1,
+                    participant_id=i + 1,
                 )
             )
             session.add(
                 ReportParticipantRoleAssociation(
                     role_id=2,
                     report_id=i + 1,
-                    rpa_participant_id=i + 1,
-                    rpa_report_id=i + 1,
+                    participant_id=i + 1,
                 )
             )
             session.add(
@@ -82,8 +83,7 @@ def create_participants():
                 ReportParticipantRoleAssociation(
                     role_id=3,
                     report_id=i + 1,
-                    rpa_participant_id=i + 6,
-                    rpa_report_id=i + 1,
+                    participant_id=i + 6,
                 )
             )
 
@@ -94,7 +94,7 @@ def create_all():
     create_roles()
     create_users()
     create_reports()
-    # create_participants()
+    create_participants()
 
 
 if __name__ == "__main__":

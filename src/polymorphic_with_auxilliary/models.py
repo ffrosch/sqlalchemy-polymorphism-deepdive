@@ -64,8 +64,8 @@ _ROLES_TYPE = Literal["creator", "reporter", "observer"]
 _ROLES: tuple[str] = get_args(_ROLES_TYPE)
 
 
-class ReportRole(Base):
-    __tablename__ = "report_role"
+class ReportParticipantRole(Base):
+    __tablename__ = "report_participant_role"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -74,16 +74,13 @@ class ReportRole(Base):
         return f"{self.__class__.__name__}(name={self.name!r})"
 
 
-_DISCRIMINATOR = SimpleNamespace(unregistered="unregistered", registered="registered")
-
-
 class ReportParticipant(Base):
     __tablename__ = "report_participant"
 
-    discriminator: Mapped[str] = mapped_column(String(12))
+    has_account: Mapped[bool] = mapped_column(nullable=False)
 
     __mapper_args__ = {
-        "polymorphic_on": discriminator,
+        "polymorphic_on": has_account,
     }
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -133,7 +130,7 @@ class ReportParticipantAssociation(Base):
     roles: AssociationProxy[list[_ROLES_TYPE]] = association_proxy(
         "roles_relation",
         "role",
-        creator=lambda role: ReportParticipantRoleAssociation(role=ReportRole(name=role)),
+        creator=lambda role: ReportParticipantRoleAssociation(role=ReportParticipantRole(name=role)),
     )
 
     def __repr__(self):
@@ -158,21 +155,21 @@ class ReportParticipantRoleAssociation(Base):
         UniqueConstraint("role_id", "report_id")
     )
 
-    role_id: Mapped[int] = mapped_column(ForeignKey(ReportRole.id), primary_key=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey(ReportParticipantRole.id), primary_key=True)
     report_id: Mapped[int] = mapped_column(primary_key=True)  # Composite FK
     participant_id: Mapped[int] = mapped_column()  # Composite FK
 
-    role: Mapped[ReportRole] = relationship()
+    role: Mapped[ReportParticipantRole] = relationship()
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(report_id={self.report_id!r}, role={self.role_id!r})"
+        return f"{self.__class__.__name__}(report_id={self.report_id!r}, role={self.role!r})"
 
 
 class ReportParticipantUnregistered(ReportParticipant):
     __tablename__ = "report_participant_unregistered"
 
     __mapper_args__ = {
-        "polymorphic_identity": _DISCRIMINATOR.unregistered,
+        "polymorphic_identity": False,
         "polymorphic_load": "inline",
     }
 
@@ -188,7 +185,7 @@ class ReportParticipantRegistered(ReportParticipant):
     __tablename__ = "report_participant_registered"
 
     __mapper_args__ = {
-        "polymorphic_identity": _DISCRIMINATOR.registered,
+        "polymorphic_identity": True,
         "polymorphic_load": "inline",
     }
 
