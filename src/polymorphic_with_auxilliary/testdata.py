@@ -114,3 +114,10 @@ if __name__ == "__main__":
 
         session.add(report)
         session.commit()
+
+        participant.roles = ["observer"]
+
+        session.add(participant)
+        session.commit()
+
+        print(participant.roles)

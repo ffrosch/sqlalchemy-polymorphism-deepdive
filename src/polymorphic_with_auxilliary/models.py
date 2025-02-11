@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Optional
+from typing import Literal, Optional, get_args
 
 from sqlalchemy import (
     CheckConstraint,
@@ -36,10 +36,12 @@ class Report(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     species: Mapped[str]
 
-    participant_associations: Mapped[list[ReportParticipantAssociation]] = relationship()
+    participants_relation: Mapped[list[ReportParticipantAssociation]] = relationship(
+        cascade="all, delete-orphan",
+    )
 
-    participants: AssociationProxy[list[ReportParticipantAssociation]] = association_proxy(
-        "participant_associations",
+    participants: AssociationProxy[list[ReportParticipant]] = association_proxy(
+        "participants_relation",
         "participant",
         creator=lambda obj: ReportParticipantAssociation(**obj),
     )
@@ -58,7 +60,8 @@ class User(Base):
         return f"{self.__class__.__name__}(name={self.name!r})"
 
 
-_ROLES: list[str] = ["creator", "reporter", "observer"]
+_ROLES_TYPE = Literal["creator", "reporter", "observer"]
+_ROLES: tuple[str] = get_args(_ROLES_TYPE)
 
 
 class ReportRole(Base):
@@ -85,9 +88,19 @@ class ReportParticipant(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    report_association: Mapped[ReportParticipantAssociation] = relationship()
-    roles: AssociationProxy[ReportParticipantAssociation] = association_proxy(
-        "report_association",
+    report_relation: Mapped[ReportParticipantAssociation] = relationship(
+        # one-to-one relation (one report per participant)
+        uselist=False,
+    )
+    report: AssociationProxy[Report] = association_proxy(
+        "report_relation",
+        "report",
+        # Setting `ReportParticipant.report` to None will remove the one-to-one
+        # entry in `ReportParticipantAssociation` as well.
+        cascade_scalar_deletes=True,
+    )
+    roles: AssociationProxy[list[_ROLES_TYPE]] = association_proxy(
+        "report_relation",
         "roles",
     )
 
@@ -106,12 +119,19 @@ class ReportParticipantAssociation(Base):
     participant_id: Mapped[int] = mapped_column(ForeignKey(ReportParticipant.id), primary_key=True)
 
     participant: Mapped[ReportParticipant] = relationship(
-        back_populates="report_association",
+        back_populates="report_relation",
+        # one-to-one relation
+        single_parent=True,
+        # each participant exists only for one report
+        # if their relation is removed, the participant must be removed, too
+        cascade="all, delete-orphan",
     )
 
-    role_associations: Mapped[list[ReportParticipantRoleAssociation]] = relationship()
-    roles: AssociationProxy[list[ReportParticipantRoleAssociation]] = association_proxy(
-        "role_associations",
+    roles_relation: Mapped[list[ReportParticipantRoleAssociation]] = relationship(
+        cascade="all, delete-orphan",
+    )
+    roles: AssociationProxy[list[_ROLES_TYPE]] = association_proxy(
+        "roles_relation",
         "role",
         creator=lambda role: ReportParticipantRoleAssociation(role=ReportRole(name=role)),
     )
@@ -134,12 +154,13 @@ class ReportParticipantRoleAssociation(Base):
                 ReportParticipantAssociation.participant_id,
             ],
         ),
+        # Unique roles per report
         UniqueConstraint("role_id", "report_id")
     )
 
     role_id: Mapped[int] = mapped_column(ForeignKey(ReportRole.id), primary_key=True)
-    report_id: Mapped[int] = mapped_column(primary_key=True)
-    participant_id: Mapped[int] = mapped_column()
+    report_id: Mapped[int] = mapped_column(primary_key=True)  # Composite FK
+    participant_id: Mapped[int] = mapped_column()  # Composite FK
 
     role: Mapped[ReportRole] = relationship()
 
