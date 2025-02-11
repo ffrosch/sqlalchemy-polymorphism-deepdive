@@ -3,7 +3,7 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from polymorphic_with_auxilliary.models import (
+from models import (
     _ROLES,
     Base,
     Report,
