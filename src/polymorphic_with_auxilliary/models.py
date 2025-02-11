@@ -36,12 +36,12 @@ class Report(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     species: Mapped[str]
 
-    participants_relation: Mapped[list[ReportParticipantAssociation]] = relationship(
+    association: Mapped[list[ReportParticipantAssociation]] = relationship(
         cascade="all, delete-orphan",
     )
 
     participants: AssociationProxy[list[ReportParticipant]] = association_proxy(
-        "participants_relation",
+        "association",
         "participant",
         creator=lambda obj: ReportParticipantAssociation(**obj),
     )
@@ -85,19 +85,19 @@ class ReportParticipant(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    report_relation: Mapped[ReportParticipantAssociation] = relationship(
+    association: Mapped[ReportParticipantAssociation] = relationship(
         # one-to-one relation (one report per participant)
         uselist=False,
     )
     report: AssociationProxy[Report] = association_proxy(
-        "report_relation",
+        "association",
         "report",
-        # Setting `ReportParticipant.report` to None will remove the one-to-one
-        # entry in `ReportParticipantAssociation` as well.
+        # This ensures that setting `ReportParticipant.report` to None will remove the
+        # one-to-one entry in `ReportParticipantAssociation` as well.
         cascade_scalar_deletes=True,
     )
     roles: AssociationProxy[list[_ROLES_TYPE]] = association_proxy(
-        "report_relation",
+        "association",
         "roles",
     )
 
@@ -116,7 +116,7 @@ class ReportParticipantAssociation(Base):
     participant_id: Mapped[int] = mapped_column(ForeignKey(ReportParticipant.id), primary_key=True)
 
     participant: Mapped[ReportParticipant] = relationship(
-        back_populates="report_relation",
+        back_populates="association",
         # one-to-one relation
         single_parent=True,
         # each participant exists only for one report
@@ -124,11 +124,11 @@ class ReportParticipantAssociation(Base):
         cascade="all, delete-orphan",
     )
 
-    roles_relation: Mapped[list[ReportParticipantRoleAssociation]] = relationship(
+    association: Mapped[list[ReportParticipantRoleAssociation]] = relationship(
         cascade="all, delete-orphan",
     )
     roles: AssociationProxy[list[_ROLES_TYPE]] = association_proxy(
-        "roles_relation",
+        "association",
         "role",
         creator=lambda role: ReportParticipantRoleAssociation(role=ReportParticipantRole(name=role)),
     )
