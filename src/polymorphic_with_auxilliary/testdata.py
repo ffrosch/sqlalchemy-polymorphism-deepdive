@@ -4,14 +4,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from models import (
-    _ROLES,
     Base,
     Report,
     ReportParticipant,
-    ReportParticipantAssociation,
     ReportParticipantRegistered,
     ReportParticipantRole,
-    ReportParticipantRoleAssociation,
+    Role,
     ReportParticipantUnregistered,
     User,
 )
@@ -30,7 +28,7 @@ Session = sessionmaker(bind=engine)
 
 def create_roles():
     with Session() as session:
-        roles = [ReportParticipantRole(name=name) for name in _ROLES]
+        roles = [Role(name=name) for name in Role.initial_data()]
         session.add_all(roles)
         session.commit()
 
@@ -49,52 +47,10 @@ def create_reports():
         session.commit()
 
 
-def create_participants():
-    with Session() as session:
-        users = session.query(User).all()
-
-        for i in range(5):
-            session.add(ReportParticipantRegistered(user=users[i]))
-            session.add(ReportParticipantUnregistered(name=f"Unregistered User {i}"))
-            session.add(
-                ReportParticipantUnregistered(name=f"Unregistered User {i + 6}")
-            )
-            session.add(
-                ReportParticipantAssociation(report_id=i + 1, participant_id=i + 1)
-            )
-            session.add(
-                ReportParticipantRoleAssociation(
-                    role_id=1,
-                    report_id=i + 1,
-                    participant_id=i + 1,
-                )
-            )
-            session.add(
-                ReportParticipantRoleAssociation(
-                    role_id=2,
-                    report_id=i + 1,
-                    participant_id=i + 1,
-                )
-            )
-            session.add(
-                ReportParticipantAssociation(report_id=i + 1, participant_id=i + 6)
-            )
-            session.add(
-                ReportParticipantRoleAssociation(
-                    role_id=3,
-                    report_id=i + 1,
-                    participant_id=i + 6,
-                )
-            )
-
-        session.commit()
-
-
 def create_all():
     create_roles()
     create_users()
     create_reports()
-    create_participants()
 
 
 if __name__ == "__main__":
