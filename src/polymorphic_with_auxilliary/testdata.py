@@ -17,6 +17,8 @@ def Session(echo=True):
     engine = create_engine(f"sqlite:///:memory:", echo=echo)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
+    with Session() as session:
+        create_roles(session)
     return Session()
 
 
@@ -28,21 +30,39 @@ def FileSession(echo=True):
     return Session()
 
 
+def get_roles(session):
+    return session.scalars(select(Role)).all()
+
+
+def create_report(session, species="Katze") -> Report:
+    report = Report(species=species)
+    session.add(report)
+    session.commit()
+    return report
+
+
+def create_reports(session, n: int = 10):
+    reports = [Report(species=f"Species {i}") for i in range(n)]
+    session.add_all(reports)
+    session.commit()
+
+
 def create_roles(session):
     roles = [Role(name=name) for name in Role.initial_data()]
     session.add_all(roles)
     session.commit()
 
 
-def create_users(session):
-    users = [User(name=f"User {i}") for i in range(5)]
-    session.add_all(users)
+def create_user(session, name="Test User") -> User:
+    user = User(name=name)
+    session.add(user)
     session.commit()
+    return user
 
 
-def create_reports(session):
-    reports = [Report(species=f"Species {i}") for i in range(10)]
-    session.add_all(reports)
+def create_users(session, n: int = 5):
+    users = [User(name=f"User {i}") for i in range(n)]
+    session.add_all(users)
     session.commit()
 
 
@@ -50,24 +70,6 @@ def create_all(session):
     create_roles(session)
     create_users(session)
     create_reports(session)
-
-
-def get_roles(session):
-    return session.scalars(select(Role)).all()
-
-
-def create_report(session, species = "Katze") -> Report:
-    report = Report(species=species)
-    session.add(report)
-    session.commit()
-    return report
-
-
-def create_user(session, name = "Test User") -> User:
-    user = User(name=name)
-    session.add(user)
-    session.commit()
-    return user
 
 
 def create_participant(session, report, user=False, roles=None):
@@ -91,8 +93,40 @@ def create_participant(session, report, user=False, roles=None):
     return participant
 
 
+def create_reports_with_participants(session):
+    roles = get_roles(session)
+    reports = []
+    for i in range(5):
+        reports.append(
+            Report(
+                species=f"Species {i}",
+                participants=[
+                    ReportParticipantUnregistered(
+                        name=f"Unregistered Participant {j}",
+                        roles=[roles[j]],
+                    )
+                    for j in range(3)
+                ],
+            )
+        )
+        reports.append(
+            Report(
+                species=f"Species {i}",
+                participants=[
+                    ReportParticipantRegistered(
+                        user=User(name=f"Registered Participant {j}"),
+                        roles=[roles[j]],
+                    )
+                    for j in range(3)
+                ],
+            )
+        )
+    session.add_all(reports)
+    session.commit()
+
+
 if __name__ == "__main__":
     session = Session()
     create_roles(session)
-    create_users(session)
-    create_reports(session)
+    create_users(session, n=5)
+    create_reports(session, n=10)

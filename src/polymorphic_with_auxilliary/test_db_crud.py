@@ -38,9 +38,11 @@ class TestReport:
             assert retrieved_reports[i].id == reports[i].id
             assert retrieved_reports[i].species == reports[i].species
 
-    def test_delete_report(self, session, report_factory, participant_factory):
+    def test_delete_report_cascade_unregistered_participant(
+        self, session, report_factory, participant_factory
+    ):
         """
-        Test deleting a report.
+        Test deleting a report including the unregistered participant
         """
         report = report_factory()
         participant_factory(report)
@@ -50,6 +52,22 @@ class TestReport:
         assert session.scalar(select(Report)) is None
         assert session.scalar(select(ReportParticipant)) is None
         assert session.scalar(select(ReportParticipantRole)) is None
+
+    def test_delete_report_nocascade_user(
+        self, session, report_factory, participant_factory
+    ):
+        """
+        Test deleting a report and not deleting the related registered user
+        """
+        report = report_factory()
+        participant_factory(report, user=True)
+        session.delete(report)
+        session.commit()
+
+        assert session.scalar(select(Report)) is None
+        assert session.scalar(select(ReportParticipant)) is None
+        assert session.scalar(select(ReportParticipantRole)) is None
+        assert session.scalar(select(User)) is not None
 
 
 class TestReportParticipant:
