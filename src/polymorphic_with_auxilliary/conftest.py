@@ -68,7 +68,8 @@ def session(engine):
 
     # Cleanup: close the session, roll back the transaction, and close the connection.
     session.close()
-    transaction.rollback()
+    if transaction.is_active:
+        transaction.rollback()
     connection.close()
 
 
