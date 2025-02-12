@@ -62,8 +62,15 @@ class ReportParticipant(Base):
     # ! - a participant must have at least one role (separate table)
     __tablename__ = "report_participant"
 
+    __table_args__ = (
+        UniqueConstraint(
+            "id", "report_id", name="uq_report_participant_fake_composite_pk"
+        ),
+    )
+
     id: Mapped[int] = mapped_column(primary_key=True)
-    report_id: Mapped[int] = mapped_column(ForeignKey(Report.id))
+    report_id: Mapped[int] = mapped_column(ForeignKey(Report.id), nullable=False)
+
     has_account: Mapped[bool] = mapped_column(nullable=False)
 
     __mapper_args__ = {
