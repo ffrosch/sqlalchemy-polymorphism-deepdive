@@ -102,7 +102,7 @@ def create_reports_with_participants(session):
                 species=f"Species {i}",
                 participants=[
                     ReportParticipantUnregistered(
-                        name=f"Unregistered Participant {j}",
+                        name=f"Unregistered Participant {i} {j}",
                         roles=[roles[j]],
                     )
                     for j in range(3)
@@ -114,13 +114,41 @@ def create_reports_with_participants(session):
                 species=f"Species {i}",
                 participants=[
                     ReportParticipantRegistered(
-                        user=User(name=f"Registered Participant {j}"),
+                        user=User(name=f"Registered Participant {i} {j}"),
                         roles=[roles[j]],
                     )
                     for j in range(3)
                 ],
             )
         )
+        # One user with multiple roles in the same report
+        users = [User(name=f"User {i}") for i in range(3)]
+        for i, user in enumerate(users):
+            reports.append(
+                Report(
+                    species=f"Other Species {i}",
+                    participants=[
+                        ReportParticipantRegistered(
+                            user=user,
+                            roles=roles,
+                        )
+                    ],
+                )
+            )
+        # One user with multiple roles in different reports
+        user = User(name=f"User Multireport {i}")
+        for j in range(3):
+            reports.append(
+                Report(
+                    species=f"Species Multireport {i}",
+                    participants=[
+                        ReportParticipantRegistered(
+                            user=user,
+                            roles=[roles[j]],
+                        )
+                    ],
+                )
+            )
     session.add_all(reports)
     session.commit()
 

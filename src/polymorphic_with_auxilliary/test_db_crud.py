@@ -9,7 +9,6 @@ from polymorphic_with_auxilliary.models import (
     ReportParticipantRegistered,
     ReportParticipantRole,
     ReportParticipantUnregistered,
-    Role,
     User,
 )
 
@@ -89,11 +88,11 @@ class TestReportParticipant:
         participant_factory(report_factory(), user=False)
         assert session.scalars(select(ReportParticipantUnregistered)).one()
 
-    def test_create_polymorphic_participant(
+    def test_create_participant_polymorphism(
         self, session, report_factory, participant_factory
     ):
         """
-        Test creating a polymorphic participant.
+        Test the polymorphism functionality of ReportParticipant
         """
         participant_factory(report_factory(), user=True)
         participant_factory(report_factory(), user=False)
@@ -113,6 +112,7 @@ class TestReportParticipant:
         session.commit()
 
         retrieved_association = session.scalars(select(ReportParticipantRole)).one()
+
         assert retrieved_association.role.name == new_role.name
 
     def test_delete_participant(self, session, report_factory, participant_factory):
