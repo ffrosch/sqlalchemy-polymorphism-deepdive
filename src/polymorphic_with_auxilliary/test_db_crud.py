@@ -151,3 +151,54 @@ class TestUser:
         for i in range(count):
             assert retrieved_users[i].id == users[i].id
             assert retrieved_users[i].name == users[i].name
+
+
+class TestReportParticipantRegistered:
+    def test_get_reports_for_user(self, session, report_factory, user_factory, roles):
+        """
+        Test the get_reports_for_user method.
+        """
+        user = user_factory()
+        report1 = report_factory()
+        participant = ReportParticipantRegistered(user=user, roles=[roles[0]])
+        participant.report = report1
+        session.add(participant)
+        session.commit()
+
+        reports = ReportParticipantRegistered.get_reports_for_user(session, user.id)
+        assert len(reports) == 1
+        assert reports[0].id == report1.id
+
+    def test_get_reports(self, session, report_factory, user_factory, roles):
+        """
+        Test the get_reports method.
+        """
+        user = user_factory()
+        report1 = report_factory()
+        participant = ReportParticipantRegistered(user=user, roles=[roles[0]])
+        participant.report = report1
+        session.add(participant)
+        session.commit()
+
+        reports = participant.get_reports(session)
+        assert len(reports) == 1
+        assert reports[0].id == report1.id
+
+    def test_get_reports_for_user_multiple_reports(self, session, report_factory, user_factory, roles):
+        """
+        Test the get_reports_for_user method with multiple reports for one user.
+        """
+        user = user_factory()
+        report1 = report_factory()
+        report2 = report_factory()
+        participant1 = ReportParticipantRegistered(user=user, roles=[roles[0]])
+        participant2 = ReportParticipantRegistered(user=user, roles=[roles[1]])
+        participant1.report = report1
+        participant2.report = report2
+        session.add_all([participant1, participant2])
+        session.commit()
+
+        reports = ReportParticipantRegistered.get_reports_for_user(session, user.id)
+        assert len(reports) == 2
+        assert reports[0].id == report1.id
+        assert reports[1].id == report2.id

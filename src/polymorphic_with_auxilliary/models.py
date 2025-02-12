@@ -10,6 +10,7 @@ from sqlalchemy.ext.hybrid import hybrid_method, hybrid_property
 from sqlalchemy.orm import (
     DeclarativeBase,
     Mapped,
+    Session,
     mapped_column,
     relationship,
 )
@@ -97,7 +98,7 @@ class ReportParticipant(Base):
         super().__init__(**kwargs)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(report_id={self.report_id})"
+        return f"{self.__class__.__name__}(id={self.id!r}, report_id={self.report_id})"
 
 
 class Role(Base):
@@ -136,7 +137,6 @@ class ReportParticipantRole(Base):
     role_id: Mapped[int] = mapped_column(ForeignKey(Role.id), primary_key=True)
     report_id: Mapped[int] = mapped_column(primary_key=True)  # Composite FK
     participant_id: Mapped[int] = mapped_column()  # Composite FK
-
 
     role: Mapped[Role] = relationship(
         viewonly=True,
@@ -186,3 +186,15 @@ class ReportParticipantRegistered(ReportParticipant):
     def __repr__(self) -> str:
         parent_repr = super().__repr__()
         return f"{parent_repr[:-1]}, user_id={self.user_id}, name={self.name!r})"
+
+    @classmethod
+    def get_reports_for_user(cls, session: Session, user_id: int) -> list[Report]:
+        return (
+            session.query(Report)
+            .join(cls, Report.id == cls.report_id)
+            .filter(cls.user_id == user_id)
+            .all()
+        )
+
+    def get_reports(self, session: Session) -> list[Report]:
+        return self.__class__.get_reports_for_user(session, self.user_id)
