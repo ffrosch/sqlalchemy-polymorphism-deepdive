@@ -1,8 +1,10 @@
+import random
+from functools import partial
 from typing import Optional
+
 import pytest  # type: ignore
 from sqlalchemy import create_engine, insert, select
 from sqlalchemy.orm import sessionmaker
-import random
 
 from polymorphic_with_auxilliary.models import (
     Base,
@@ -12,6 +14,12 @@ from polymorphic_with_auxilliary.models import (
     ReportParticipantUnregistered,
     Role,
     User,
+)
+from polymorphic_with_auxilliary.testdata import (
+    create_participant,
+    create_report,
+    create_user,
+    get_roles,
 )
 
 
@@ -24,10 +32,12 @@ def engine():
     engine = create_engine("sqlite:///:memory:")
 
     def _fk_pragma_on_connect(dbapi_con, con_record):
-        dbapi_con.execute('pragma foreign_keys=ON')
+        """Make SQLite respect FK constraints."""
+        dbapi_con.execute("pragma foreign_keys=ON")
 
     from sqlalchemy import event
-    event.listen(engine, 'connect', _fk_pragma_on_connect)
+
+    event.listen(engine, "connect", _fk_pragma_on_connect)
 
     # Create all tables defined in the Base's metadata.
     Base.metadata.create_all(engine)
@@ -70,58 +80,21 @@ def session(engine):
 @pytest.fixture
 def user_factory(session):
     """Factory fixture to create and persist a User."""
-
-    def create_user(name: Optional[str] = None) -> User:
-        if name is None:
-            name = f"User {random.randint(1, 100)}"
-        user = User(name=name)
-        session.add(user)
-        # A commit here is safe because it only commits within the SAVEPOINT.
-        session.commit()
-        return user
-
-    return create_user
+    return partial(create_user, session)
 
 
 @pytest.fixture
 def report_factory(session):
     """Factory fixture to create and persist a Report."""
-
-    def create_report(species: Optional[str] = None) -> Report:
-        species = species or f"Species {random.randint(1, 100)}"
-        report = Report(species=species)
-        session.add(report)
-        session.commit()
-        return report
-
-    return create_report
+    return partial(create_report, session)
 
 
 @pytest.fixture
 def roles(session):
-    return session.scalars(select(Role)).all()
+    return get_roles(session)
 
 
 @pytest.fixture
 def participant_factory(session, roles):
     """Factory fixture to create and persist a ReportParticipant."""
-
-    def create_participant(report, user=False, roles=[roles[0]]):
-        roles = roles if roles else []
-        if user:
-            participant = ReportParticipantRegistered(
-                user=User(name="Registered User"),
-                roles=roles,
-            )
-            participant.report = report
-        else:
-            participant = ReportParticipantUnregistered(
-                name="Unregistered User",
-                roles=roles,
-            )
-            participant.report = report
-        session.add(participant)
-        session.commit()
-        return participant
-
-    return create_participant
+    return partial(create_participant, session, roles=[roles[0]])

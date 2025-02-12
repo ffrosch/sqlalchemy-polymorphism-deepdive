@@ -1,9 +1,8 @@
 from __future__ import annotations
-from sqlalchemy.exc import IntegrityError, OperationalError
-
-from sqlalchemy import select
 
 import pytest  # type: ignore
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError, OperationalError
 
 from polymorphic_with_auxilliary.models import (
     Report,
@@ -15,6 +14,7 @@ from polymorphic_with_auxilliary.models import (
     User,
 )
 
+
 class TestParticipant:
     def test_create_participant_without_role(self, report_factory, participant_factory):
         """
@@ -24,9 +24,11 @@ class TestParticipant:
             report = report_factory()
             participant = participant_factory(report, roles=None)
 
-    def test_create_participant_with_duplicate_role(self, session, report_factory, participant_factory):
+    def test_assign_participant_with_duplicate_role(
+        self, session, report_factory, participant_factory
+    ):
         """
-        Test assigning a participant to a report with the same role twice
+        Test that assignment of duplicate roles for same participant fails
         """
         with pytest.raises(IntegrityError):
             role = session.scalar(select(Role))
@@ -35,9 +37,27 @@ class TestParticipant:
             session.add(participant)
             session.commit()
 
-    def test_participant_must_be_unique(self, session, report_factory, participant_factory):
+    def test_assign_duplicate_role(self, session, report_factory, participant_factory):
         """
-        Test the assignment of a participant to multiple reports
+        Test that assignment of duplicate roles for different participants fails
+        """
+        with pytest.raises(IntegrityError):
+            role = session.scalar(select(Role))
+
+            report = report_factory()
+            report.participants = [
+                ReportParticipantUnregistered(name="Participant 1", roles=[role]),
+                ReportParticipantUnregistered(name="Participant 2", roles=[role]),
+            ]
+
+            session.add(report)
+            session.commit()
+
+    def test_participant_must_be_unique(
+        self, session, report_factory, participant_factory
+    ):
+        """
+        Test that assignment of a participant to multiple reports fails due to FK constraint
         """
         with pytest.raises(IntegrityError):
             report1 = report_factory()
@@ -47,3 +67,31 @@ class TestParticipant:
 
             report2.participants.append(participant)
             session.commit()
+
+    def test_sqlite_fk_constraint_set(
+        self, session, report_factory, participant_factory
+    ):
+        """
+        If this assignment doesn't fail, the FK constraint is not enforced
+        (must be set manually on SQLite)
+        """
+        with pytest.raises(IntegrityError):
+            report1 = report_factory()
+            report2 = report_factory()
+
+            participant = participant_factory(report1)
+
+            report2.participants.append(participant)
+            session.commit()
+
+            # If the foreign key constraint is not activated in SQLite,
+            # the report_id in the association will be set to report2.
+            # but the report_id in ReportParticipantRole will stay set to report1.
+            assoc_report_id = session.scalars(select(ReportParticipant.report_id)).one()
+            role_report_id = session.scalars(
+                select(ReportParticipantRole.report_id)
+            ).one()
+
+            assert assoc_report_id == role_report_id
+            assert assoc_report_id == report1.id
+            assert role_report_id == report1.id
