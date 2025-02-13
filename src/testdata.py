@@ -4,11 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from src.models import (
     Base,
     Report,
-    ReportParticipant,
+    ReportParticipantAssociation,
     ReportParticipantRegistered,
-    ReportParticipantRole,
+    ReportParticipantRoleAssociation,
     ReportParticipantUnregistered,
-    Role,
+    ReportParticipantRole,
     User,
 )
 
@@ -31,7 +31,7 @@ def FileSession(echo=True):
 
 
 def get_roles(session):
-    return session.scalars(select(Role)).all()
+    return session.scalars(select(ReportParticipantRole)).all()
 
 
 def create_report(session, species="Katze") -> Report:
@@ -48,7 +48,7 @@ def create_reports(session, n: int = 10):
 
 
 def create_roles(session):
-    roles = [Role(name=name) for name in Role.initial_data()]
+    roles = [ReportParticipantRole(name=name) for name in ReportParticipantRole.initial_data()]
     session.add_all(roles)
     session.commit()
 

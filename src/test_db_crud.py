@@ -5,9 +5,9 @@ from sqlalchemy import func, select
 
 from src.models import (
     Report,
-    ReportParticipant,
+    ReportParticipantAssociation,
     ReportParticipantRegistered,
-    ReportParticipantRole,
+    ReportParticipantRoleAssociation,
     ReportParticipantUnregistered,
     User,
 )
@@ -49,8 +49,8 @@ class TestReport:
         session.commit()
 
         assert session.scalar(select(Report)) is None
-        assert session.scalar(select(ReportParticipant)) is None
-        assert session.scalar(select(ReportParticipantRole)) is None
+        assert session.scalar(select(ReportParticipantAssociation)) is None
+        assert session.scalar(select(ReportParticipantRoleAssociation)) is None
 
     def test_delete_report_nocascade_user(
         self, session, report_factory, participant_factory
@@ -64,8 +64,8 @@ class TestReport:
         session.commit()
 
         assert session.scalar(select(Report)) is None
-        assert session.scalar(select(ReportParticipant)) is None
-        assert session.scalar(select(ReportParticipantRole)) is None
+        assert session.scalar(select(ReportParticipantAssociation)) is None
+        assert session.scalar(select(ReportParticipantRoleAssociation)) is None
         assert session.scalar(select(User)) is not None
 
     def test_roles_property(self, session, roles, report_factory, participant_factory):
@@ -140,12 +140,12 @@ class TestReportParticipant:
         self, session, report_factory, participant_factory
     ):
         """
-        Test the polymorphism functionality of ReportParticipant
+        Test the polymorphism functionality of ReportParticipantAssociation
         """
         participant_factory(report_factory(), user=True)
         participant_factory(report_factory(), user=False)
 
-        assert session.scalar(select(func.count(ReportParticipant.id))) == 2
+        assert session.scalar(select(func.count(ReportParticipantAssociation.id))) == 2
         assert session.scalar(select(func.count(ReportParticipantRegistered.id))) == 1
         assert session.scalar(select(func.count(ReportParticipantUnregistered.id))) == 1
 
@@ -160,7 +160,7 @@ class TestReportParticipant:
         participant.roles = [new_role]
         session.commit()
 
-        retrieved_association = session.scalars(select(ReportParticipantRole)).one()
+        retrieved_association = session.scalars(select(ReportParticipantRoleAssociation)).one()
         assert retrieved_association.role.name == new_role.name
 
     def test_delete_participant(self, session, report_factory, participant_factory):
@@ -172,8 +172,8 @@ class TestReportParticipant:
         report.participants = []
         session.commit()
 
-        assert session.scalar(select(ReportParticipant)) is None
-        assert session.scalar(select(ReportParticipantRole)) is None
+        assert session.scalar(select(ReportParticipantAssociation)) is None
+        assert session.scalar(select(ReportParticipantRoleAssociation)) is None
 
     def test_retrieve_reports_with_specific_number_of_participants(self, session, roles, report_factory, participant_factory):
         """

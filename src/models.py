@@ -42,7 +42,7 @@ class Report(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     species: Mapped[str]
 
-    participants: Mapped[list[ReportParticipant]] = relationship(
+    participants: Mapped[list[ReportParticipantAssociation]] = relationship(
         cascade="all, delete-orphan",
         # eager loading: load all participants together with the report
         # as info about them is needed in every report anyways
@@ -54,20 +54,23 @@ class Report(Base):
         return [role for p in self.participants for role in p.roles]
 
     @hybrid_method
-    def has_role(self, role: str | Role):
-        name = role.name if isinstance(role, Role) else role
+    def has_role(self, role: str | ReportParticipantRole):
+        name = role.name if isinstance(role, ReportParticipantRole) else role
         return any(role.name == name for p in self.participants for role in p.roles)
 
     @has_role.expression
-    def has_role(cls, role: str | Role):
-        name = role.name if isinstance(role, Role) else role
+    def has_role(cls, role: str | ReportParticipantRole):
+        name = role.name if isinstance(role, ReportParticipantRole) else role
         subq = (
             select(1)
-            .select_from(ReportParticipantRole)
-            .join(Role, ReportParticipantRole.role_id == Role.id)
+            .select_from(ReportParticipantRoleAssociation)
+            .join(
+                ReportParticipantRole,
+                ReportParticipantRoleAssociation.role_id == ReportParticipantRole.id,
+            )
             .where(
-                ReportParticipantRole.report_id == cls.id,
-                Role.name == name,
+                ReportParticipantRoleAssociation.report_id == cls.id,
+                ReportParticipantRole.name == name,
             )
         )
         return exists(subq)
@@ -79,8 +82,8 @@ class Report(Base):
     @participants_count.expression
     def participants_count(cls):
         return (
-            select(func.count(ReportParticipant.id))
-            .where(ReportParticipant.report_id == cls.id)
+            select(func.count(ReportParticipantAssociation.id))
+            .where(ReportParticipantAssociation.report_id == cls.id)
             .scalar_subquery()
         )
 
@@ -95,19 +98,23 @@ class Report(Base):
         return session.scalars(stmt).all()
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(id={self.id!r}, species={self.species!r}, participants_count={self.participants_count!r})"
+        return (
+            f"{self.__class__.__name__}(id={self.id!r}, "
+            f"species={self.species!r}, "
+            f"participants_count={self.participants_count!r})"
+        )
 
 
-class ReportParticipant(Base):
+class ReportParticipantAssociation(Base):
     # ! IMPORTANT:
     # ! - participants can only be mapped to one Report
     # ! - registered participants (users) use a "dummy" ID for each report
     # ! - unregistered participants are created on a per-report-basis
     # ! - a participant must have at least one role (separate table)
-    __tablename__ = "report_participant"
+    __tablename__ = "report_participant_association"
 
     __table_args__ = (
-        # ! (id, report_id) are used as composite FK in ReportParticipantRole
+        # ! (id, report_id) are used as composite FK in ReportParticipantRoleAssociation
         # to enforce the constraint "one report per participant"
         # for this a reliable reference to the "report_id" is needed
         # and creating a PK Composite key does not work reliably due to the
@@ -130,16 +137,16 @@ class ReportParticipant(Base):
         back_populates="participants",
         lazy="selectin",
     )
-    roles_associations: Mapped[list[ReportParticipantRole]] = relationship(
+    role_associations: Mapped[list[ReportParticipantRoleAssociation]] = relationship(
         cascade="all, delete-orphan",
         back_populates="participant",
         lazy="selectin",
     )
     # quick access to the concrete roles of a participant
-    roles: AssociationProxy[list[Role]] = association_proxy(
-        "roles_associations",
+    roles: AssociationProxy[list[ReportParticipantRole]] = association_proxy(
+        "role_associations",
         "roles",
-        creator=lambda roles: ReportParticipantRole(roles=roles),
+        creator=lambda roles: ReportParticipantRoleAssociation(roles=roles),
     )
 
     def __init__(self, roles, **kwargs):
@@ -152,8 +159,8 @@ class ReportParticipant(Base):
         return f"{self.__class__.__name__}(id={self.id!r}, report_id={self.report_id})"
 
 
-class Role(Base):
-    __tablename__ = "role"
+class ReportParticipantRole(Base):
+    __tablename__ = "report_participant_role"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
@@ -167,8 +174,8 @@ class Role(Base):
         return f"{self.__class__.__name__}(id={self.id}, name={self.name})"
 
 
-class ReportParticipantRole(Base):
-    __tablename__ = "report_participant_role"
+class ReportParticipantRoleAssociation(Base):
+    __tablename__ = "report_participant_role_association"
     __table_args__ = (
         # ! IMPORTANT:
         # ! this COMPOSITE FK guarantees enforcement of the constraint
@@ -176,7 +183,7 @@ class ReportParticipantRole(Base):
         # ! used in combination with the report_id it belongs to!
         ForeignKeyConstraint(
             ["report_id", "participant_id"],
-            [ReportParticipant.report_id, ReportParticipant.id],
+            [ReportParticipantAssociation.report_id, ReportParticipantAssociation.id],
             name="fk_report_participant_role_report_participant",
         ),
         # ! Each report can have each role only once
@@ -185,31 +192,39 @@ class ReportParticipantRole(Base):
         ),
     )
 
-    role_id: Mapped[int] = mapped_column(ForeignKey(Role.id), primary_key=True)
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey(ReportParticipantRole.id), primary_key=True
+    )
     report_id: Mapped[int] = mapped_column(primary_key=True)  # Composite FK
     participant_id: Mapped[int] = mapped_column()  # Composite FK
 
-    role: Mapped[Role] = relationship(
+    role: Mapped[ReportParticipantRole] = relationship(
         viewonly=True,
     )
     # Return list when queried from parent, otherwise it's role
-    roles: Mapped[list[Role]] = relationship(
+    roles: Mapped[list[ReportParticipantRole]] = relationship(
         lazy="selectin",
     )
-    participant: Mapped[ReportParticipant] = relationship()
+    participant: Mapped[ReportParticipantAssociation] = relationship()
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(report_id={self.report_id!r}, participant_id={self.participant_id!r}, role={self.role!r})"
+        return (
+            f"{self.__class__.__name__}(report_id={self.report_id!r}, "
+            f"participant_id={self.participant_id!r}, "
+            "role={self.role!r})"
+        )
 
 
-class ReportParticipantUnregistered(ReportParticipant):
+class ReportParticipantUnregistered(ReportParticipantAssociation):
     __tablename__ = "report_participant_unregistered"
     __mapper_args__ = {
         "polymorphic_identity": False,
         "polymorphic_load": "inline",
     }
 
-    id: Mapped[int] = mapped_column(ForeignKey(ReportParticipant.id), primary_key=True)
+    id: Mapped[int] = mapped_column(
+        ForeignKey(ReportParticipantAssociation.id), primary_key=True
+    )
     name: Mapped[str]
 
     def __repr__(self) -> str:
@@ -217,14 +232,16 @@ class ReportParticipantUnregistered(ReportParticipant):
         return f"{parent_repr[:-1]}, name={self.name!r})"
 
 
-class ReportParticipantRegistered(ReportParticipant):
+class ReportParticipantRegistered(ReportParticipantAssociation):
     __tablename__ = "report_participant_registered"
     __mapper_args__ = {
         "polymorphic_identity": True,
         "polymorphic_load": "inline",
     }
 
-    id: Mapped[int] = mapped_column(ForeignKey(ReportParticipant.id), primary_key=True)
+    id: Mapped[int] = mapped_column(
+        ForeignKey(ReportParticipantAssociation.id), primary_key=True
+    )
     user_id: Mapped[int] = mapped_column(ForeignKey(User.id), nullable=False)
     user: Mapped[User] = relationship(
         lazy="selectin",
@@ -244,9 +261,14 @@ class ReportParticipantRegistered(ReportParticipant):
             object_session(self)
             .scalars(
                 select(Report)
-                .join(with_polymorphic(ReportParticipant, ReportParticipantRegistered))
+                .join(
+                    with_polymorphic(
+                        ReportParticipantAssociation, ReportParticipantRegistered
+                    )
+                )
                 .where(ReportParticipantRegistered.user_id == self.user_id)
-            ).all()
+            )
+            .all()
         )
 
     @classmethod

@@ -6,11 +6,11 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 
 from src.models import (
     Report,
-    ReportParticipant,
+    ReportParticipantAssociation,
     ReportParticipantRegistered,
-    ReportParticipantRole,
+    ReportParticipantRoleAssociation,
     ReportParticipantUnregistered,
-    Role,
+    ReportParticipantRole,
     User,
 )
 
@@ -31,7 +31,7 @@ class TestParticipant:
         Test that assignment of duplicate roles for same participant fails
         """
         with pytest.raises(IntegrityError):
-            role = session.scalar(select(Role))
+            role = session.scalar(select(ReportParticipantRole))
             participant = participant_factory(report_factory(), roles=[role, role])
 
             session.add(participant)
@@ -42,7 +42,7 @@ class TestParticipant:
         Test that assignment of duplicate roles for different participants fails
         """
         with pytest.raises(IntegrityError):
-            role = session.scalar(select(Role))
+            role = session.scalar(select(ReportParticipantRole))
 
             report = report_factory()
             report.participants = [
@@ -86,10 +86,10 @@ class TestParticipant:
 
             # If the foreign key constraint is not activated in SQLite,
             # the report_id in the association will be set to report2.
-            # but the report_id in ReportParticipantRole will stay set to report1.
-            assoc_report_id = session.scalars(select(ReportParticipant.report_id)).one()
+            # but the report_id in ReportParticipantRoleAssociation will stay set to report1.
+            assoc_report_id = session.scalars(select(ReportParticipantAssociation.report_id)).one()
             role_report_id = session.scalars(
-                select(ReportParticipantRole.report_id)
+                select(ReportParticipantRoleAssociation.report_id)
             ).one()
 
             assert assoc_report_id == role_report_id

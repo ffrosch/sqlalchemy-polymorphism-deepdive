@@ -10,9 +10,9 @@ from src.models import (
     Base,
     Report,
     ReportParticipantRegistered,
-    ReportParticipantRole,
+    ReportParticipantRoleAssociation,
     ReportParticipantUnregistered,
-    Role,
+    ReportParticipantRole,
     User,
 )
 from src.testdata import (
@@ -61,7 +61,7 @@ def session(engine):
     Session = sessionmaker(bind=connection)
     session = Session()
 
-    roles = [Role(name=role) for role in Role.initial_data()]
+    roles = [ReportParticipantRole(name=role) for role in ReportParticipantRole.initial_data()]
     session.add_all(roles)
 
     yield session
@@ -97,5 +97,5 @@ def roles(session):
 
 @pytest.fixture
 def participant_factory(session, roles):
-    """Factory fixture to create and persist a ReportParticipant."""
+    """Factory fixture to create and persist a ReportParticipantAssociation."""
     return partial(create_participant, session, roles=[roles[0]])
