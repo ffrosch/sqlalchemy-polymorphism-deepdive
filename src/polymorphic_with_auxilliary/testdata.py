@@ -96,59 +96,72 @@ def create_participant(session, report, user=False, roles=None):
 def create_reports_with_participants(session):
     roles = get_roles(session)
     reports = []
-    for i in range(5):
-        reports.append(
-            Report(
-                species=f"Species {i}",
-                participants=[
-                    ReportParticipantUnregistered(
-                        name=f"Unregistered Participant {i} {j}",
-                        roles=[roles[j]],
-                    )
-                    for j in range(3)
-                ],
-            )
+    reports.append(
+        Report(
+            species=f"Species 1",
+            participants=[
+                ReportParticipantUnregistered(
+                    name=f"Unregistered Participant 1",
+                    roles=[roles[0]],
+                )
+            ],
         )
+    )
+    reports.append(
+        Report(
+            species=f"Species 2",
+            participants=[
+                ReportParticipantRegistered(
+                    user=User(name=f"Registered Participant 2"),
+                    roles=[roles[1]],
+                )
+            ],
+        )
+    )
+    # One user with multiple roles in the same report
+    for i in range(3,5):
         reports.append(
             Report(
-                species=f"Species {i}",
+                species=f"Multi-Roles {i}",
                 participants=[
                     ReportParticipantRegistered(
-                        user=User(name=f"Registered Participant {i} {j}"),
-                        roles=[roles[j]],
+                        user=User(name=f"Multi-Roles {i}"),
+                        roles=roles,
                     )
-                    for j in range(3)
                 ],
             )
         )
-        # One user with multiple roles in the same report
-        users = [User(name=f"User {i}") for i in range(3)]
-        for i, user in enumerate(users):
-            reports.append(
-                Report(
-                    species=f"Other Species {i}",
-                    participants=[
-                        ReportParticipantRegistered(
-                            user=user,
-                            roles=roles,
-                        )
-                    ],
-                )
+    # One user with multiple roles in different reports
+    user = User(name=f"Multi-Report")
+    for j in range(3):
+        reports.append(
+            Report(
+                species=f"Multi-Report",
+                participants=[
+                    ReportParticipantRegistered(
+                        user=user,
+                        roles=[roles[j]],
+                    )
+                ],
             )
-        # One user with multiple roles in different reports
-        user = User(name=f"User Multireport {i}")
-        for j in range(3):
-            reports.append(
-                Report(
-                    species=f"Species Multireport {i}",
-                    participants=[
-                        ReportParticipantRegistered(
-                            user=user,
-                            roles=[roles[j]],
-                        )
-                    ],
-                )
-            )
+        )
+    for i in range(9,11):
+        report = Report(species=f"Multi-Participant {i}")
+        report.participants = [
+            ReportParticipantRegistered(user=User(name=f"Multi-Participant {i}"), roles=[roles[0]]),
+            ReportParticipantUnregistered(name=f"Multi-Participant {i}", roles=roles[1:]),
+        ]
+        reports.append(report)
+    for i in range(11,13):
+        report = Report(species=f"Multi-Participant {i}")
+        report.participants = [
+            ReportParticipantRegistered(user=User(name=f"Multi-Participant {i}"), roles=[roles[0]]),
+            ReportParticipantUnregistered(name=f"Multi-Participant {i}", roles=[roles[1]]),
+            ReportParticipantUnregistered(name=f"Multi-Participant {i}", roles=[roles[2]]),
+        ]
+        reports.append(report)
+
+
     session.add_all(reports)
     session.commit()
 

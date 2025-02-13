@@ -68,6 +68,54 @@ class TestReport:
         assert session.scalar(select(ReportParticipantRole)) is None
         assert session.scalar(select(User)) is not None
 
+    def test_roles_property(self, session, roles, report_factory, participant_factory):
+        """
+        Test the roles property of Report.
+        """
+        report = report_factory()
+        participant_factory(report, roles=[roles[0]])
+        participant_factory(report, roles=[roles[1]])
+
+        retrieved_report = session.scalar(select(Report))
+        assert retrieved_report.roles == [roles[0], roles[1]]
+
+    def test_has_role_property(self, session, report_factory, roles, participant_factory):
+        """
+        Test the has_role method of Report.
+        """
+        for i in range(3):
+            participant_factory(report_factory(), roles=[roles[0]])
+            participant_factory(report_factory(), roles=roles)
+
+        retrieved_reports = session.scalars(select(Report)).all()
+
+        # Property
+        assert len([r for r in retrieved_reports if r.has_role(roles[0])]) == 6
+        assert len([r for r in retrieved_reports if r.has_role(roles[1])]) == 3
+        assert len([r for r in retrieved_reports if r.has_role(roles[2].name)]) == 3
+
+        # Expression
+        assert len(session.scalars(select(Report).where(Report.has_role(roles[0]))).all()) == 6
+        assert len(session.scalars(select(Report).where(Report.has_role(roles[1]))).all()) == 3
+        assert len(session.scalars(select(Report).where(Report.has_role(roles[2].name))).all()) == 3
+
+    def test_participants_count_property(self, session, roles, report_factory, participant_factory):
+        """
+        Test the participants_count property of Report.
+        """
+        report = report_factory()
+        participant_factory(report, roles=[roles[0]])
+        participant_factory(report, roles=[roles[1]])
+
+        # Property
+        retrieved_report = session.scalar(select(Report))
+        assert retrieved_report.participants_count == 2
+
+        # Expression
+        participant_factory(report_factory())
+        assert len(session.scalars(select(Report.id).where(Report.participants_count == 1)).all()) == 1
+        assert len(session.scalars(select(Report.id).where(Report.participants_count == 2)).all()) == 1
+        assert len(session.scalars(select(Report.id).where(Report.participants_count == 3)).all()) == 0
 
 class TestReportParticipant:
     def test_create_registered_participant(
@@ -96,6 +144,7 @@ class TestReportParticipant:
         """
         participant_factory(report_factory(), user=True)
         participant_factory(report_factory(), user=False)
+
         assert session.scalar(select(func.count(ReportParticipant.id))) == 2
         assert session.scalar(select(func.count(ReportParticipantRegistered.id))) == 1
         assert session.scalar(select(func.count(ReportParticipantUnregistered.id))) == 1
@@ -112,7 +161,6 @@ class TestReportParticipant:
         session.commit()
 
         retrieved_association = session.scalars(select(ReportParticipantRole)).one()
-
         assert retrieved_association.role.name == new_role.name
 
     def test_delete_participant(self, session, report_factory, participant_factory):
@@ -126,6 +174,26 @@ class TestReportParticipant:
 
         assert session.scalar(select(ReportParticipant)) is None
         assert session.scalar(select(ReportParticipantRole)) is None
+
+    def test_retrieve_reports_with_specific_number_of_participants(self, session, roles, report_factory, participant_factory):
+        """
+        Test retrieving reports with a specific number of participants.
+        """
+        report_with_2 = report_factory()
+        for i in range(2):
+            participant_factory(report_with_2, roles=[roles[i]])
+
+        report_with_3 = report_factory()
+        for i in range(3):
+            participant_factory(report_with_3, roles=[roles[i]])
+
+        reports_with_2_participants = Report.get_with_number_of_participants(session, 2)
+        reports_with_3_participants = Report.get_with_number_of_participants(session, 3)
+
+        assert len(reports_with_2_participants) == 1
+        assert len(reports_with_3_participants) == 1
+        assert reports_with_2_participants[0].id == report_with_2.id
+        assert reports_with_3_participants[0].id == report_with_3.id
 
 
 class TestUser:
@@ -158,16 +226,13 @@ class TestReportParticipantRegistered:
         """
         Test the get_reports_for_user method.
         """
-        user = user_factory()
-        report1 = report_factory()
-        participant = ReportParticipantRegistered(user=user, roles=[roles[0]])
-        participant.report = report1
+        participant = ReportParticipantRegistered(user=user_factory(), report=report_factory(), roles=[roles[0]])
         session.add(participant)
         session.commit()
 
-        reports = ReportParticipantRegistered.get_reports_for_user(session, user.id)
+        reports = ReportParticipantRegistered.get_reports_for_user(session, participant.user_id)
         assert len(reports) == 1
-        assert reports[0].id == report1.id
+        assert reports[0].id == participant.report_id
 
     def test_get_reports(self, session, report_factory, user_factory, roles):
         """
@@ -202,3 +267,29 @@ class TestReportParticipantRegistered:
         assert len(reports) == 2
         assert reports[0].id == report1.id
         assert reports[1].id == report2.id
+
+    def test_reports_property(self, session, report_factory, user_factory, roles):
+        """
+        Test the reports property of ReportParticipantRegistered.
+        """
+        session.add(ReportParticipantRegistered(user=user_factory(), report=report_factory(), roles=roles))
+        session.commit()
+
+        report = session.scalar(select(Report))
+        participant = session.scalar(select(ReportParticipantRegistered))
+
+        assert participant.reports == [report]
+
+    def test_reports_property_multiple_reports(self, session, report_factory, user_factory, roles):
+        """
+        Test the reports property of ReportParticipantRegistered.
+        """
+        user = user_factory()
+        session.add(ReportParticipantRegistered(user=user, report=report_factory(), roles=roles))
+        session.add(ReportParticipantRegistered(user=user, report=report_factory(), roles=roles))
+        session.commit()
+
+        reports = session.scalars(select(Report)).all()
+        participant = session.scalar(select(ReportParticipantRegistered))
+
+        assert participant.reports == reports

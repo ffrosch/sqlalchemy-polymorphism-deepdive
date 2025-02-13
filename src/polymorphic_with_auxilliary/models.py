@@ -4,6 +4,10 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     UniqueConstraint,
+    and_,
+    exists,
+    func,
+    select,
 )
 from sqlalchemy.ext.associationproxy import AssociationProxy, association_proxy
 from sqlalchemy.ext.hybrid import hybrid_method, hybrid_property
@@ -12,7 +16,9 @@ from sqlalchemy.orm import (
     Mapped,
     Session,
     mapped_column,
+    object_session,
     relationship,
+    with_polymorphic,
 )
 
 
@@ -43,8 +49,53 @@ class Report(Base):
         lazy="selectin",
     )
 
+    @property
+    def roles(self):
+        return [role for p in self.participants for role in p.roles]
+
+    @hybrid_method
+    def has_role(self, role: str | Role):
+        name = role.name if isinstance(role, Role) else role
+        return any(role.name == name for p in self.participants for role in p.roles)
+
+    @has_role.expression
+    def has_role(cls, role: str | Role):
+        name = role.name if isinstance(role, Role) else role
+        subq = (
+            select(1)
+            .select_from(ReportParticipantRole)
+            .join(Role, ReportParticipantRole.role_id == Role.id)
+            .where(
+                ReportParticipantRole.report_id == cls.id,
+                Role.name == name,
+            )
+        )
+        return exists(subq)
+
+    @hybrid_property
+    def participants_count(self):
+        return len(self.participants)
+
+    @participants_count.expression
+    def participants_count(cls):
+        return (
+            select(func.count(ReportParticipant.id))
+            .where(ReportParticipant.report_id == cls.id)
+            .scalar_subquery()
+        )
+
+    @classmethod
+    def get_with_number_of_participants(cls, session, n: int):
+        stmt = (
+            select(Report)
+            .join(Report.participants)
+            .group_by(Report.id)
+            .having(func.count(Report.participants) == n)
+        )
+        return session.scalars(stmt).all()
+
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(id={self.id!r}, species={self.species!r})"
+        return f"{self.__class__.__name__}(id={self.id!r}, species={self.species!r}, participants_count={self.participants_count!r})"
 
 
 class ReportParticipant(Base):
@@ -79,14 +130,14 @@ class ReportParticipant(Base):
         back_populates="participants",
         lazy="selectin",
     )
-    report_participant_roles: Mapped[list[ReportParticipantRole]] = relationship(
+    roles_associations: Mapped[list[ReportParticipantRole]] = relationship(
         cascade="all, delete-orphan",
         back_populates="participant",
         lazy="selectin",
     )
     # quick access to the concrete roles of a participant
     roles: AssociationProxy[list[Role]] = association_proxy(
-        "report_participant_roles",
+        "roles_associations",
         "roles",
         creator=lambda roles: ReportParticipantRole(roles=roles),
     )
@@ -186,6 +237,17 @@ class ReportParticipantRegistered(ReportParticipant):
     def __repr__(self) -> str:
         parent_repr = super().__repr__()
         return f"{parent_repr[:-1]}, user_id={self.user_id}, name={self.name!r})"
+
+    @property
+    def reports(self):
+        return (
+            object_session(self)
+            .scalars(
+                select(Report)
+                .join(with_polymorphic(ReportParticipant, ReportParticipantRegistered))
+                .where(ReportParticipantRegistered.user_id == self.user_id)
+            ).all()
+        )
 
     @classmethod
     def get_reports_for_user(cls, session: Session, user_id: int) -> list[Report]:
