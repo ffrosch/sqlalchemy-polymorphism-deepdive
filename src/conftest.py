@@ -6,7 +6,7 @@ import pytest  # type: ignore
 from sqlalchemy import create_engine, insert, select
 from sqlalchemy.orm import sessionmaker
 
-from polymorphic_with_auxilliary.models import (
+from src.models import (
     Base,
     Report,
     ReportParticipantRegistered,
@@ -15,7 +15,7 @@ from polymorphic_with_auxilliary.models import (
     Role,
     User,
 )
-from polymorphic_with_auxilliary.testdata import (
+from src.testdata import (
     create_participant,
     create_report,
     create_user,

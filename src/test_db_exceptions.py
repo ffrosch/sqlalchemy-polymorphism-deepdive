@@ -4,7 +4,7 @@ import pytest  # type: ignore
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, OperationalError
 
-from polymorphic_with_auxilliary.models import (
+from src.models import (
     Report,
     ReportParticipant,
     ReportParticipantRegistered,

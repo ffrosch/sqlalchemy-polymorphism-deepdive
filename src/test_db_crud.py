@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest  # type: ignore
 from sqlalchemy import func, select
 
-from polymorphic_with_auxilliary.models import (
+from src.models import (
     Report,
     ReportParticipant,
     ReportParticipantRegistered,

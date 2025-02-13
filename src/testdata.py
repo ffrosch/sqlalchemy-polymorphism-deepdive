@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 
-from polymorphic_with_auxilliary.models import (
+from src.models import (
     Base,
     Report,
     ReportParticipant,
